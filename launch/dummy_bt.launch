@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+
+    <node pkg="grvc_bt_ros" type="node" name="grvc_bt_ros" output="screen">
+        <param name="file" value="$(find grvc_bt_ros)/bt_xml/dummy_bt.xml"/>
+    </node>
+
+</launch>

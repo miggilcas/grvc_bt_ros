@@ -57,7 +57,7 @@ Behavior Tree wrapper for UAVs in ROS -->
 ## Overview
 
 
-This package provides a custom RViz panel for managing the Workswell Wiris Pro camera in the context of SIMAR project. The panel allows users to make a simple use of the camera features, such as start/stop recording video, capture images, enable the ethernet video Stream, Zoom Adjustement, etc; using as a driver package in ROS as a backend. 
+This package provides a wrapper for ROS and UAVs.
 
 ## Support ROS version
 - melodic
@@ -93,7 +93,7 @@ catkin build
 
 <br />
 <div align="center">
-  a href="https://github.com/miggilcas/grvc_bt_ros">
+  <a href="https://github.com/miggilcas/grvc_bt_ros">
     <img src="docs/logo_grvc.png" alt="Logo" width="" height="100">
   </a>
 

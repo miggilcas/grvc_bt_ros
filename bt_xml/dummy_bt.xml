@@ -1,0 +1,36 @@
+<root main_tree_to_execute = "MainTree">
+    <BehaviorTree ID="MainTree">
+        <Sequence>
+            <SetBlackboard output_key="Initial_pose" value="0;0;3;0.0" />
+            <SetBlackboard output_key="Goal_a" value="5;0;3;-90" />
+            <SetBlackboard output_key="Goal_b" value="5;5;5;0" />
+            <SetBlackboard output_key="Goal_c" value="0;5;3;90" />
+            <SetBlackboard output_key="Goal_d" value="6;4;15;30" />
+            <Sequence>
+                <CheckBattery name="check_battery"/>
+                <TakeOff name="take_off" goal="0;0;3;0.0"/>
+                  
+                <Sequence name="Square">
+                    <SubTree ID="MoveUAV" name="move_goal_a" target="Goal_a"/>
+                    <SubTree ID="MoveUAV" name="move_goal_b" target="Goal_b"/>
+                    <SubTree ID="MoveUAV" name="move_goal_c" target="Goal_c"/>
+                    <SubTree ID="MoveUAV" name="move_goal_d" target="Goal_d"/>
+                </Sequence>
+                <PlatformVisible name="platform_visible"/>
+                <Approach name="approach"/>
+                <CheckError name="approach_to_fine"/>
+                <Fine name="fine"/>
+                <CheckError name="fine_to_landing"/>
+                <Land name="land"/>
+
+                 
+            </Sequence>
+        </Sequence>
+    </BehaviorTree>
+
+    <BehaviorTree ID="MoveUAV">
+        <Sequence name="SetGoal">
+            <GoToGoal goal= "{target}" />
+        </Sequence>
+    </BehaviorTree>
+</root>

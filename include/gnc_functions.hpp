@@ -2,25 +2,29 @@
 #include <geographic_msgs/GeoPoseStamped.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/TwistStamped.h>
 #include <iostream>
 #include <math.h>
 #include <mavros_msgs/CommandBool.h>
 #include <mavros_msgs/CommandLong.h>
 #include <mavros_msgs/CommandTOL.h>
+#include <mavros_msgs/ExtendedState.h>
 #include <mavros_msgs/GlobalPositionTarget.h>
 #include <mavros_msgs/PositionTarget.h>
+#include <mavros_msgs/SetMavFrame.h>
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/State.h>
 #include <mavros_msgs/WaypointPull.h>
 #include <mavros_msgs/WaypointPush.h>
 #include <mavros_msgs/WaypointSetCurrent.h>
+
 #include <nav_msgs/Odometry.h>
 #include <ros/duration.h>
 #include <ros/ros.h>
-#include <std_msgs/Float64.h>
 #include <std_msgs/Float32MultiArray.h>
-#include <std_srvs/Trigger.h>
+#include <std_msgs/Float64.h>
 #include <std_msgs/String.h>
+#include <std_srvs/Trigger.h>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -31,6 +35,7 @@ This module is designed to make high level control programming more simple.
 */
 
 mavros_msgs::State current_state_g;
+mavros_msgs::ExtendedState current_extended_state_g;
 nav_msgs::Odometry current_pose_g;
 geometry_msgs::Pose correction_vector_g;
 geometry_msgs::Point local_offset_pose_g;
@@ -46,6 +51,7 @@ ros::Publisher global_lla_pos_pub;
 ros::Publisher global_lla_pos_pub_raw;
 ros::Subscriber currentPos;
 ros::Subscriber state_sub;
+ros::Subscriber extended_state_sub;
 ros::ServiceClient arming_client;
 ros::ServiceClient land_client;
 ros::ServiceClient set_mode_client;
@@ -68,6 +74,10 @@ struct gnc_api_waypoint {
 // get armed state
 void state_cb(const mavros_msgs::State::ConstPtr &msg) {
   current_state_g = *msg;
+}
+// get extended stat
+void extended_state_cb(const mavros_msgs::ExtendedState::ConstPtr &msg) {
+  current_extended_state_g = *msg;
 }
 geometry_msgs::Point enu_2_local(nav_msgs::Odometry current_pose_enu) {
   float x = current_pose_enu.pose.pose.position.x;
@@ -171,6 +181,17 @@ void set_destination(float x, float y, float z, float psi) {
   x = Xlocal + correction_vector_g.position.x + local_offset_pose_g.x;
   y = Ylocal + correction_vector_g.position.y + local_offset_pose_g.y;
   z = Zlocal + correction_vector_g.position.z + local_offset_pose_g.z;
+  ROS_INFO("Destination set to x: %f y: %f z: %f origin frame", x, y, z);
+
+  waypoint_g.pose.position.x = x;
+  waypoint_g.pose.position.y = y;
+  waypoint_g.pose.position.z = z;
+
+  local_pos_pub.publish(waypoint_g);
+}
+void set_destination_local(float x, float y, float z, float psi) {
+  set_heading(psi);
+  // transform map to local
   ROS_INFO("Destination set to x: %f y: %f z: %f origin frame", x, y, z);
 
   waypoint_g.pose.position.x = x;
@@ -418,7 +439,7 @@ int check_waypoint_reached(float pos_tolerance = 0.3,
   if (dMag < pos_tolerance && headingErr < heading_tolerance) {
     return 1;
   } else {
-    //ROS_INFO("Pos error %f", dMag);
+    // ROS_INFO("Pos error %f", dMag);
     return 0;
   }
 }
@@ -576,6 +597,9 @@ int init_publisher_subscriber(ros::NodeHandle controlnode) {
       (ros_namespace + "/mavros/global_position/local").c_str(), 10, pose_cb);
   state_sub = controlnode.subscribe<mavros_msgs::State>(
       (ros_namespace + "/mavros/state").c_str(), 10, state_cb);
+  extended_state_sub = controlnode.subscribe<mavros_msgs::ExtendedState>(
+      (ros_namespace + "/mavros/extended_state").c_str(), 10,
+      extended_state_cb);
   arming_client = controlnode.serviceClient<mavros_msgs::CommandBool>(
       (ros_namespace + "/mavros/cmd/arming").c_str());
   land_client = controlnode.serviceClient<mavros_msgs::CommandTOL>(

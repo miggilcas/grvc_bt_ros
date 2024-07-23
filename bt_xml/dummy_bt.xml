@@ -1,15 +1,18 @@
-<root main_tree_to_execute = "MainTree">
+<root main_tree_to_execute = "MainTree" BTCPP_format="3">
+
     <BehaviorTree ID="MainTree">
-        <Sequence>
-            <SetBlackboard output_key="Initial_pose" value="0;0;3;0.0" />
-            <SetBlackboard output_key="Goal_a" value="5;0;3;-90" />
-            <SetBlackboard output_key="Goal_b" value="5;5;5;0" />
-            <SetBlackboard output_key="Goal_c" value="0;5;3;90" />
-            <SetBlackboard output_key="Goal_d" value="6;4;15;30" />
-            <Sequence>
-                <CheckBattery name="check_battery"/>
-                <TakeOff name="take_off" goal="0;0;3;0.0"/>
-                  
+    <!--<Sequence>
+            <SetBlackboard output_key="Initial_pose" value="0;0;10;0.0" />
+            <SetBlackboard output_key="Goal_a" value="0;5;10;-90" />
+            <SetBlackboard output_key="Goal_b" value="5;5;15;0" />
+            <SetBlackboard output_key="Goal_c" value="0;5;15;90" />
+            <SetBlackboard output_key="Goal_d" value="0;0;15;30" /-->
+            <Sequence> 
+                <!--CheckBattery name="check_battery"/-->
+                <Fallback>
+                    <CheckOnAir name="check_on_air"/>  
+                    <TakeOff name="take_off" goal="0;0;3;0.0"/>
+                 </Fallback> 
                 <Sequence name="Square">
                     <SubTree ID="MoveUAV" name="move_goal_a" target="Goal_a"/>
                     <SubTree ID="MoveUAV" name="move_goal_b" target="Goal_b"/>
@@ -25,7 +28,7 @@
 
                  
             </Sequence>
-        </Sequence>
+        <!--/Sequence-->
     </BehaviorTree>
 
     <BehaviorTree ID="MoveUAV">

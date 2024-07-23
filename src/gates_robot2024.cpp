@@ -3,34 +3,12 @@
 #include <behaviortree_cpp_v3/bt_factory.h>
 #include <behaviortree_cpp_v3/loggers/bt_cout_logger.h>
 #include <gnc_functions.hpp>
+#include <mutex>
 
 using namespace BT;
 // Here we will define the dummy functions for actions and conditions
 //
 // Simple function that return a NodeStatus
-BT::NodeStatus CheckBattery() {
-  std::cout << "[ Battery: OK ]" << std::endl;
-  return BT::NodeStatus::SUCCESS;
-}
-float visibility = 0;
-float error = 0;
-ros::Subscriber statusSub;
-void status_cb(const std_msgs::Float32MultiArrayConstPtr &msg) {
-
-  visibility = msg->data[0] + msg->data[1];
-  error = msg->data[2];
-  // ROS_INFO("visibility %f",visibility);
-}
-BT::NodeStatus PlatformVisible() {
-  // If the % of the platform visible is greater than 1
-  ros::spinOnce();
-  if (visibility <= 0.002) {
-    return BT::NodeStatus::RUNNING;
-  } else {
-    printf("Platform Visible\n");
-    return BT::NodeStatus::SUCCESS;
-  }
-}
 BT::NodeStatus CheckOnAir() {
   // If the % of the platform visible is greater than 1
   ros::spinOnce();
@@ -51,17 +29,35 @@ BT::NodeStatus CheckOnAir() {
     return BT::NodeStatus::RUNNING;
   }
 }
-BT::NodeStatus CheckError() {
-  // If the % of the platform visible is greater than 1
-  ros::spinOnce();
-  if (error >= 115 || error == 0) {
-    return BT::NodeStatus::RUNNING;
-  } else {
-    printf("Acceptable error\n");
-    error = 0;
-    return BT::NodeStatus::SUCCESS;
-  }
+ros::Subscriber vel_sub;
+double velocity_ = 0;
+void velocityCallback(const geometry_msgs::TwistStamped::ConstPtr &msg) {
+  velocity_ = std::sqrt(std::pow(msg->twist.linear.x, 2) +
+                        std::pow(msg->twist.linear.y, 2) +
+                        std::pow(msg->twist.linear.z, 2));
+  // ROS_INFO("COSITES velocity: %f", velocity_);
 }
+class WaitUntil : public ConditionNode {
+public:
+  WaitUntil(const std::string &name, const NodeConfiguration &config)
+      : ConditionNode(name, config) {
+    // Initialize ROS node handle and subscriber
+  }
+
+  static PortsList providedPorts() { return {}; }
+
+  NodeStatus tick() override {
+    sleep(0.5);
+    ros::spinOnce();
+    ROS_INFO("%f", velocity_);            // palante
+    if (velocity_ < 0.07 && velocity_ > 0) // Check if velocity is close to zero
+    {
+      return NodeStatus::SUCCESS;
+    }
+    return NodeStatus::RUNNING;
+  }
+};
+
 // GoToGoal and custom type to specify a goal
 // Custom type
 struct Pose3D {
@@ -103,17 +99,34 @@ public:
       // For this reason throw an exception instead of returning FAILURE
       throw BT::RuntimeError("missing required input [goal]");
     }
-    set_destination(goal.x, goal.y, goal.z, goal.psi);
-    ROS_INFO("Sending goal %f %f %f %f", goal.x, goal.y, goal.z, goal.psi);
-    // while (check_waypoint_reached(.3) == 0) {
-    //   // polling at 50 Hz
-    //   // ROS_INFO("Moving...");
-    // }
+    // At first we need to specify the reference frame
 
-    while (check_waypoint_reached(0.3) == 0) {
-      // ROS_INFO("Waypoint not reached");
-      ros::spinOnce();
-      sleep(1);
+    ros::ServiceClient reference_client;
+    mavros_msgs::SetMavFrame srv;
+
+    reference_client = node_.serviceClient<mavros_msgs::SetMavFrame>(
+        "/mavros/setpoint_position/mav_frame");
+    srv.request.mav_frame = 1;
+    reference_client.call(srv);
+
+    if (srv.response.success) {
+      ROS_INFO("Changed the frame to GLOBAL");
+
+      set_destination_local(goal.x, goal.y, goal.z, goal.psi);
+      ROS_INFO("Sending goal %f %f %f %f", goal.x, goal.y, goal.z, goal.psi);
+      // while (check_waypoint_reached(.3) == 0) {
+      //   // polling at 50 Hz
+      //   // ROS_INFO("Moving...");
+      // }
+
+      while (check_waypoint_reached(1.5) == 0) {
+        // ROS_INFO("Waypoint not reached");
+        ros::spinOnce();
+        sleep(0.1);
+      }
+    } else {
+      ROS_INFO("Changing the frame Failed ");
+      return BT::NodeStatus::FAILURE;
     }
     // while (check_waypoint_reached(0.5) == 0) {
     //   ROS_INFO("Waypoint not reached");
@@ -123,6 +136,9 @@ public:
     //
     return BT::NodeStatus::SUCCESS;
   }
+
+private:
+  ros::NodeHandle node_;
 };
 class TakeOff : public BT::AsyncActionNode {
 public:
@@ -189,63 +205,6 @@ public:
   }
 };
 
-class Approach : public BT::AsyncActionNode {
-public:
-  Approach(const std::string &name, const BT::NodeConfiguration &config)
-      : BT::AsyncActionNode(name, config) {}
-
-  static BT::PortsList providedPorts() { return {}; }
-  // You must override the virtual function tick()
-  virtual BT::NodeStatus tick() override {
-
-    ros::ServiceClient approach_client;
-    std_srvs::Trigger srv;
-
-    approach_client =
-        node_.serviceClient<std_srvs::Trigger>("/landing/mode/approach");
-    approach_client.call(srv);
-
-    if (srv.response.success) {
-      ROS_INFO("Approaching Successfully");
-      return BT::NodeStatus::SUCCESS;
-    } else {
-      ROS_INFO("Approach Failed %s", srv.response.message.c_str());
-      return BT::NodeStatus::FAILURE;
-    }
-  }
-
-private:
-  ros::NodeHandle node_;
-};
-
-class Fine : public BT::AsyncActionNode {
-public:
-  Fine(const std::string &name, const BT::NodeConfiguration &config)
-      : BT::AsyncActionNode(name, config) {}
-
-  static BT::PortsList providedPorts() { return {}; }
-  // You must override the virtual function tick()
-  virtual BT::NodeStatus tick() override {
-
-    ros::ServiceClient fine_client;
-    std_srvs::Trigger srv;
-
-    fine_client = node_.serviceClient<std_srvs::Trigger>("/landing/mode/fine");
-    fine_client.call(srv);
-
-    if (srv.response.success) {
-      ROS_INFO("fining Successfully");
-      sleep(1);
-      return BT::NodeStatus::SUCCESS;
-    } else {
-      ROS_INFO("fine Failed %s", srv.response.message.c_str());
-      return BT::NodeStatus::FAILURE;
-    }
-  }
-
-private:
-  ros::NodeHandle node_;
-};
 class Land : public BT::AsyncActionNode {
 public:
   Land(const std::string &name, const BT::NodeConfiguration &config)
@@ -264,14 +223,118 @@ public:
     }
   }
 };
+class RunPotter : public BT::AsyncActionNode {
+public:
+  RunPotter(const std::string &name, const BT::NodeConfiguration &config)
+      : BT::AsyncActionNode(name, config) {}
+
+  static BT::PortsList providedPorts() { return {}; }
+  // You must override the virtual function tick()
+  virtual BT::NodeStatus tick() override {
+
+    // At first we need to specify the reference frame
+
+    ros::ServiceClient reference_client;
+    mavros_msgs::SetMavFrame frame_srv;
+
+    reference_client = node_.serviceClient<mavros_msgs::SetMavFrame>(
+        "/mavros/setpoint_position/mav_frame");
+    frame_srv.request.mav_frame = 8;
+    reference_client.call(frame_srv);
+
+    if (frame_srv.response.success) {
+      ROS_INFO("Changed the frame to BODY NED");
+      // Now we can run the whole thing
+      ros::ServiceClient run_potter_client;
+      std_srvs::Trigger srv;
+
+      run_potter_client = node_.serviceClient<std_srvs::Trigger>("/potter/run");
+      sleep(1);
+      run_potter_client.call(srv);
+
+      if (srv.response.success) {
+        ROS_INFO("Crossing the gate");
+        sleep(1);
+        return BT::NodeStatus::SUCCESS;
+      } else {
+        ROS_INFO("Crossing Failed %s", srv.response.message.c_str());
+        return BT::NodeStatus::FAILURE;
+      }
+    } else {
+      ROS_INFO("Changing the frame Failed ");
+      return BT::NodeStatus::FAILURE;
+    }
+  }
+
+private:
+  ros::NodeHandle node_;
+};
+
+// FOREACH TEST
+class ForEach : public ControlNode {
+public:
+  ForEach(const std::string &name, const NodeConfiguration &config)
+      : ControlNode(name, config), current_index_(0) {
+    getInput<std::vector<std::string>>("input_key", input_list_);
+  }
+
+  static PortsList providedPorts() {
+    return {InputPort<std::vector<std::string>>("input_key"),
+            OutputPort<std::string>("output_key")};
+  }
+
+  void halt() override {
+    current_index_ = 0;
+    ControlNode::halt();
+  }
+
+  NodeStatus tick() override {
+    if (status() == NodeStatus::IDLE) {
+      current_index_ = 0;
+      setStatus(NodeStatus::RUNNING);
+      std::cout << "ForEach: Starting iteration\n";
+    }
+
+    while (current_index_ < input_list_.size()) {
+      std::string current_gate = input_list_[current_index_];
+      std::cout << "ForEach: Current Gate: " << current_gate << std::endl;
+
+      setOutput("output_key", current_gate);
+      NodeStatus child_status = children_nodes_[0]->executeTick();
+
+      if (child_status == NodeStatus::RUNNING) {
+        return NodeStatus::RUNNING;
+      } else if (child_status == NodeStatus::FAILURE) {
+        std::cout << "ForEach: Child node failed\n";
+        return NodeStatus::FAILURE;
+      }
+
+      current_index_++;
+    }
+
+    if (current_index_ >= input_list_.size()) {
+      current_index_ = 0;
+      setStatus(NodeStatus::IDLE); // Reset status to IDLE after completion
+      std::cout << "ForEach: Iteration complete, returning SUCCESS\n";
+      return NodeStatus::SUCCESS;
+    }
+
+    return NodeStatus::RUNNING; // This line should not be reached normally
+  }
+
+private:
+  std::vector<std::string> input_list_;
+  size_t current_index_;
+};
+
 int main(int argc, char **argv) {
-  ros::init(argc, argv, "test_bt");
+  ros::init(argc, argv, "gates_robot2024_node");
   // ROS Stuff
   ros::NodeHandle nh("~");
   // initialize control publisher/subscribers
   init_publisher_subscriber(nh);
-  statusSub = nh.subscribe<std_msgs::Float32MultiArray>("/landing/status", 10,
-                                                        status_cb);
+  vel_sub = nh.subscribe("/mavros/local_position/velocity_body", 10,
+                         velocityCallback);
 
   // wait for FCU connection
   wait4connect();
@@ -284,15 +347,16 @@ int main(int argc, char **argv) {
   std::string xml_filename;
   nh.param<std::string>(
       "file", xml_filename,
-      "/home/user/simar/src/grvc_bt_ros/grvc_bt_ros/cfg/dummy_bt.xml");
+      "/home/user/simar/src/grvc_bt_ros/grvc_bt_ros/cfg/gates_bt.xml");
   ROS_INFO("Loading XML : %s", xml_filename.c_str());
   // We use the BehaviorTreeFactory to register our custom nodes
   BehaviorTreeFactory factory;
   // The recommended way to create a Node is through inheritance.
   factory.registerNodeType<GoToGoal>("GoToGoal");
+  factory.registerNodeType<WaitUntil>("WaitUntil");
   factory.registerNodeType<TakeOff>("TakeOff");
-  factory.registerNodeType<Approach>("Approach");
-  factory.registerNodeType<Fine>("Fine");
+  factory.registerNodeType<RunPotter>("RunPotter");
+  // factory.registerNodeType<ForEach>("ForEach");
   factory.registerNodeType<Land>("Land");
 
   //  factory.registerSimpleCondition("CheckBattery",
@@ -301,10 +365,6 @@ int main(int argc, char **argv) {
 
   factory.registerSimpleCondition("CheckOnAir",
                                   [&](TreeNode &) { return CheckOnAir(); });
-  factory.registerSimpleCondition(
-      "PlatformVisible", [&](TreeNode &) { return PlatformVisible(); });
-  factory.registerSimpleCondition("CheckError",
-                                  [&](TreeNode &) { return CheckError(); });
 
   // Trees are created at deployment-time (i.e. at run-time, but only once at
   // the beginning). The currently supported format is XML. IMPORTANT: when the

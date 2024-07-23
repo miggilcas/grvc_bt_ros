@@ -1,0 +1,38 @@
+<root main_tree_to_execute = "MainTree" BTCPP_format="3">
+    <BehaviorTree ID="MainTree">
+        <Sequence>
+            <SetBlackboard output_key="Initial_pose" value="0;0;3;0.0" />
+            <SetBlackboard output_key="Goal_1" value="5;0;3;-90" />
+            <SetBlackboard output_key="Goal_2" value="5;5;5;0" />
+            <SetBlackboard output_key="Goal_3" value="0;5;3;90" />
+            <SetBlackboard output_key="Goal_4" value="6;4;15;30" />
+            <SetBlackboard output_key="Goal_5" value="10;0;3;-90" />
+            <SetBlackboard output_key="Goal_6" value="15;5;5;0" />
+            <SetBlackboard output_key="Goal_7" value="20;5;3;90" />
+            <SetBlackboard output_key="GateList" value="[Goal_1, Goal_2, Goal_3, Goal_4, Goal_5, Goal_6, Goal_7]" />
+
+            <Sequence>
+                <Fallback>
+                    <CheckOnAir name="check_on_air"/>  
+                    <TakeOff name="take_off" goal="0;0;3;0.0"/>
+                 </Fallback> 
+                  
+                <ForEach name="GatesLoop" input_key="GateList" output_key="current_gate">
+                    <SubTree ID="CrossGate" gate="{current_gate}"/>
+                </ForEach>
+
+                <Land name="land"/>
+            </Sequence>
+        </Sequence>
+    </BehaviorTree>
+
+    <BehaviorTree ID="CrossGate">
+        <Sequence name="CrossGateSequence">
+            <GoToGoal goal="{gate}" />
+            <WaitUntil name="WaitUntilStill"/>
+            <RunPotter />
+            <WaitUntil name="WaitUntilStill"/>
+        </Sequence>
+    </BehaviorTree>
+</root>
+

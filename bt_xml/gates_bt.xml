@@ -1,0 +1,60 @@
+<root main_tree_to_execute="MainTree" BTCPP_format="3">
+    <BehaviorTree ID="MainTree">
+        <Sequence>
+            <!-- Set initial parameters -->
+            <SetBlackboard output_key="Initial_pose" value="0;0;3;0.0" />
+            <SetBlackboard output_key="Goal_1" value="-1.6;8.6;2.52;-238" />
+            <SetBlackboard output_key="Goal_2" value="-10;-0.95;2.49;-164" />
+            <SetBlackboard output_key="Goal_3" value="-11.57;-8.58;2.49;-111" />
+            <SetBlackboard output_key="Goal_4" value="5.53;-13.06;2.49;-49" />
+            <SetBlackboard output_key="Goal_5" value="13.67;1.03;2.49;43" />
+            <SetBlackboard output_key="Goal_6" value="6.74;11.53;2.49;85.758" />
+            <SetBlackboard output_key="GateList" value="[Goal_1, Goal_2, Goal_3, Goal_4, Goal_5, Goal_6]" />
+
+            <!-- Check if drone is on air and take off if not 9.65;11.71;2.49;-230.46-->
+            <Fallback>
+                <CheckOnAir name="check_on_air"/>  
+                <TakeOff name="take_off" goal="0;0;3;0.0"/>
+            </Fallback> 
+
+            <!-- Cross each gate sequentially -->
+            <Sequence name="CrossGatesSequence">
+                <!-- Cross Gate 1 -->
+                <SubTree ID="CrossGate" target="Goal_1"/>                
+                <SubTree ID="CrossGate" target="Goal_2"/>
+                <SubTree ID="CrossGate" target="Goal_3"/>
+                <SubTree ID="CrossGate" target="Goal_4"/>
+                <SubTree ID="CrossGate" target="Goal_5"/>        
+                <SubTree ID="CrossGate" target="Goal_6"/>
+
+                <SubTree ID="CrossGate" target="Goal_1"/>                
+                <SubTree ID="CrossGate" target="Goal_2"/>
+                <SubTree ID="CrossGate" target="Goal_3"/>
+                <SubTree ID="CrossGate" target="Goal_4"/>
+                <SubTree ID="CrossGate" target="Goal_5"/>        
+                <SubTree ID="CrossGate" target="Goal_6"/>
+
+                <SubTree ID="CrossGate" target="Goal_1"/>                
+                <SubTree ID="CrossGate" target="Goal_2"/>
+                <SubTree ID="CrossGate" target="Goal_3"/>
+                <SubTree ID="CrossGate" target="Goal_4"/>
+                <SubTree ID="CrossGate" target="Goal_5"/>        
+                <SubTree ID="CrossGate" target="Goal_6"/>
+            </Sequence>
+
+            <!-- Land the drone after completing all gates -->
+            <Land name="land"/>
+        </Sequence>
+    </BehaviorTree>
+
+    <!-- Subtree for crossing each gate -->
+    <BehaviorTree ID="CrossGate">
+        <Sequence name="CrossGateSequence">
+            <GoToGoal goal="{target}" />
+            <WaitUntil name="WaitUntilStill"/>
+            <RunPotter />
+            <WaitUntil name="WaitUntilStill"/>
+        </Sequence>
+    </BehaviorTree>
+</root>
+
